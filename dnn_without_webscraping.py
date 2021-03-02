@@ -10,15 +10,12 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import re
 from tensorflow.keras import regularizers
+
+#Categories
 #0-sport, 1-kultur, 2-techtud
 
-
-#TODO
-# bag-of-words
-#SVM
-
 def first_filter_text(texts):
-
+    #Replace special characters
     texts = [re.sub(r'\-|\?|!|\.|\,',' ',text) for text in texts]
     texts = [text.replace('á','a') for text in texts]
     texts = [text.replace('é','e') for text in texts]
@@ -32,6 +29,7 @@ def first_filter_text(texts):
     return texts
 
 def second_filter_text(texts):
+    #Remove suffixes
     texts = [re.sub('.tt |.al |.el |ban |ben |bol |ba |be |rol |tol |nak |nek |ana |ene |na |ne |ni |va |ve |.bb |ja |je |ra |re ',' ',text) for text in texts]
     return texts
 
@@ -41,36 +39,36 @@ def preprocessing():
 
   path = "C:\\Suli\\Tesztfeladat\\"
 
-  #Beolvasom pandas segitsegevel, hogy leellenorizzem, van-e ures cella
+  #Read csv to pd df
   df = pd.read_csv(path + "texts.csv",encoding='utf8')
+
+  #remove ID 
   df.rename(columns={"Unnamed: 0": "Id"}, inplace = True)
   del df['Id']
-  #megnezni, van-e null
-  #print(df.info())
 
-  #témákhoz megnezni, mennyi elem tartozik
+
+  #Check whether there is null value
+  #print(df.info())
+  #count group by Topic 
   #print(df['Topic'].value_counts())
 
-
-  #kategoriakat szamokka alakitani
-  df['Topic'] = df['Topic'].astype("category")
-
+  #prepare to make categorical values
   df['Topic'] = df['Topic'].replace(['sport'],'0')
   df['Topic'] = df['Topic'].replace(['kultur'],'1')
   df['Topic'] = df['Topic'].replace(['techtud'],'2')
   df = df.astype({"Topic" : int})
 
-  #megkeverem
+  #shuffle
   df = shuffle(df)
 
-  #visszaalakitom python list-re 
+  #transform to numpy list
   labels =  df["Topic"].to_numpy()
+  texts = df["Text"].to_numpy()
+  #make categorical values
   labels = tf.keras.utils.to_categorical(labels, num_classes = 3)
 
-  texts = df["Text"].to_numpy()
-
   #a,e,i,o,u
-
+  #Filter the text
   texts = first_filter_text(texts)
   texts = second_filter_text(texts)
 
@@ -113,20 +111,27 @@ def statistics(texts):
 
 def compute(texts, labels):
 
-
+  #Significantly influence the training speed
   vocab_size = 65000
 
 
   tokenizer = Tokenizer(num_words= vocab_size,oov_token="<OOV>")
+  #make numbers from words
   tokenizer.fit_on_texts(texts)
 
+  #number of different words
+  #print("Number of different words: ",len(tokenizer.word_index))
+
+  #make sequences (array of integers, the tokenizer parsed an int to each word)
   sequences = tokenizer.texts_to_sequences(texts)
 
   max_length = 450    
+  #make same length arrays
   padded = pad_sequences(sequences, padding = 'post', maxlen=max_length)
 
+  #split data into train-test 70%-30%
   training_size = int(len(padded) * 7 / 10)
-
+  
   training_x = padded[:training_size]
   training_y = labels[:training_size]
 
@@ -146,10 +151,12 @@ def compute(texts, labels):
   ])
 
 
-  model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+  #check the size of the model
   #model.summary()
 
+  model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
+  #make a callback to prevent overfittting; stop at 99.8% training accuracy
 
   class myCallback(tf.keras.callbacks.Callback):
       def on_epoch_end(self, epoch, logs={}):
@@ -168,6 +175,7 @@ def compute(texts, labels):
 
 
 def show(history):
+  #Show the result of the training
   def plot_graphs(history, string):
     plt.plot(history.history[string])
     plt.plot(history.history['val_' + string])
