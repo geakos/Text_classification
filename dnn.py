@@ -12,15 +12,71 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 import re
 from tensorflow.keras import regularizers
 import json
-
+import chardet
 
 #Categories
 #0-sport, 1-kultur, 2-techtud
 
 
+def test_with_diff_sources(model):
+    path = "C:\\Suli\\Tesztfeladat\\"
+    file_name = path + "test_data_from_diff_sources.csv"
+
+    df = pd.read_csv(file_name,encoding='utf8')
+    #delete id
+    del df['Id']
+
+    #prepare to make categorical values
+    df['Topic'] = df['Topic'].replace(['sport'],'0')
+    df['Topic'] = df['Topic'].replace(['kultur'],'1')
+    df['Topic'] = df['Topic'].replace(['techtud'],'2')
+    df = df.astype({"Topic" : int})
+
+
+    df = shuffle(df)
+
+    #transform to numpy list
+    labels =  df["Topic"].to_numpy()
+    texts = df["Text"].to_numpy()
+
+    #a,e,i,o,u
+    #Filter the text
+    texts = first_filter_text(texts)
+    texts = second_filter_text(texts)
+
+    #for text in texts:
+    #print(text)
+
+    #make categorical values
+    labels = tf.keras.utils.to_categorical(labels, num_classes = 3)
+
+    vocab_size = 140000
+    tokenizer = Tokenizer(num_words= vocab_size,oov_token="<OOV>")
+    #make numbers from words
+    tokenizer.fit_on_texts(texts)
+
+    #make sequences (array of integers, the tokenizer parsed an int to each word)
+    sequences = tokenizer.texts_to_sequences(texts)
+
+    max_length = 450
+
+    #make same length arrays
+    padded = pad_sequences(sequences, padding = 'post', maxlen=max_length)
+
+    result = model.predict(padded)
+
+    print(result)
+    print(labels)
+
+
+
+
+
 def first_filter_text(texts):
     #Replace special characters
     texts = [re.sub(r'\-|\?|!|\.|\,',' ',text) for text in texts]
+    #Upper to lowercase
+    texts = [text.lower() for text in texts]
     texts = [text.replace('á','a') for text in texts]
     texts = [text.replace('é','e') for text in texts]
     texts = [text.replace('ű','u') for text in texts]
@@ -57,7 +113,7 @@ def preprocessing():
     #print(df['Topic'].value_counts())
 
 
-    #Smake pd df from scraped data
+    #make pd df from scraped data
     df2 = pd.DataFrame(scraped_data)
     df2.rename(columns={0: "Topic", 1 : "Text" }, inplace = True)
 
@@ -114,11 +170,11 @@ def statistics(texts):
     maximum = magic_obj[size][1]
 
 
-    print("Minimális hossz: ", minimum)
-    print("25 hossz: ", percent25)
-    print("Medián hossz: ", half)
-    print("75 hossz: ", percent75)
-    print("Maximum hossz: ", maximum)
+    print("Min length: ", minimum)
+    print("25 length: ", percent25)
+    print("Median length: ", half)
+    print("75 length: ", percent75)
+    print("Max length: ", maximum)
 def compute(texts, labels):
 
     #Significantly influence the training speed
@@ -129,7 +185,7 @@ def compute(texts, labels):
     tokenizer.fit_on_texts(texts)
 
     #number of different words
-    #print("Kulonbozo szavak szama: ",len(tokenizer.word_index))
+    #print("Number of different words: ",len(tokenizer.word_index))
 
     #make sequences (array of integers, the tokenizer parsed an int to each word)
     sequences = tokenizer.texts_to_sequences(texts)
@@ -139,7 +195,7 @@ def compute(texts, labels):
     #make same length arrays
     padded = pad_sequences(sequences, padding = 'post', maxlen=max_length)
 
-    #split train-test into 70%-30%
+    #split data into train-test 70%-30%
     training_size = int(len(padded) * 7 / 10)
 
     training_x = padded[:training_size]
@@ -158,11 +214,10 @@ def compute(texts, labels):
         tf.keras.layers.Dense(3, activation='softmax')
     ])
 
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-
     #check the size of the model
     #model.summary()
+
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     #make a callback to prevent overfittting; stop at 99.8% training accuracy
     class myCallback(tf.keras.callbacks.Callback):
@@ -177,7 +232,7 @@ def compute(texts, labels):
     num_epochs = 10
     history = model.fit(training_x,training_y,epochs=num_epochs, validation_data=(testing_x, testing_y),callbacks=[callbacks])
 
-    return history
+    return model, history
 def show(history):
     #Show the result of the training
     def plot_graphs(history, string):
@@ -195,9 +250,10 @@ def show(history):
 
 def main():
   texts, labels = preprocessing()
-  statistics(texts)
-  history = compute(texts, labels)
-  show(history)
+  #statistics(texts)
+  model, history = compute(texts, labels)
+  #show(history)
+  test_with_diff_sources(model)
 
 
 
